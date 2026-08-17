@@ -1,0 +1,7 @@
+# Ejemplo del formato de generate.txt
+# Una línea por carta: <cantidad>x<codigo>
+# Ejecuta `python3 export_cards.py` para exportarlas.
+2xOP01-001
+4xOP15-014
+1xOP05-019
+3xOP10-060

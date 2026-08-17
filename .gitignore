@@ -1,0 +1,29 @@
+# Entorno
+.env
+
+# Caché e imágenes descargadas de la API
+.cache/
+
+# Exportaciones generadas
+exports/
+errors.txt
+
+# Imágenes fuente (ya no se usan con generate.txt)
+cartas/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Vercel
+.vercel/
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Node (si algún día se añade tooling)
+node_modules/
