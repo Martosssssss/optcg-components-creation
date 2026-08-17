@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cartas One Piece — Generador</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <main class="wrap">
+
+    <header class="page-head">
+      <p class="eyebrow">One Piece TCG</p>
+      <h1>Generador de cartas</h1>
+      <p class="lede">Sube un archivo <code>.txt</code> o pega el texto con una carta por línea (<code>cantidadxcódigo</code>, ej. <code>4xOP15-014</code>) y exporta las imágenes.</p>
+    </header>
+
+    <section class="panel input-panel">
+      <label class="drop" for="file-input">
+        <input id="file-input" type="file" accept=".txt,text/plain">
+        <span class="drop-title">Subir archivo .txt</span>
+        <span class="drop-hint">o arrastra y suelta aquí</span>
+      </label>
+
+      <label class="field-label" for="text-input">O pega el texto</label>
+      <textarea id="text-input" rows="6" spellcheck="false" placeholder="4xOP15-014&#10;2xOP05-019"></textarea>
+
+      <div class="actions">
+        <button id="generate-btn" type="button" class="btn btn-primary" disabled>Generar cartas</button>
+        <button id="zip-btn" type="button" class="btn" disabled>Descargar todas (ZIP)</button>
+      </div>
+      <p id="status" class="status" role="status"></p>
+    </section>
+
+    <section id="errors" class="panel errors-panel hidden">
+      <h2>Errores</h2>
+      <ul id="errors-list"></ul>
+    </section>
+
+    <section id="results" class="grid hidden"></section>
+
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

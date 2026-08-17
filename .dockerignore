@@ -1,0 +1,10 @@
+.git
+.opencode
+.cache
+exports
+cartas
+.env
+node_modules
+*.md
+.DS_Store
+.gitignore
