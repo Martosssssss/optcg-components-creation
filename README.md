@@ -70,6 +70,6 @@ El diseño se edita en `index.html`:
 - **Nombre** → `.name`
 - **Número de serie** → `.code`
 - **Cantidad** → `.quantity` (se muestra como `xN`)
-- **Imagen del personaje** → `.character img` (se rellena automáticamente con cada carta)
+- **Imagen del personaje** → `.character` (fondo con `background-image`; `background-size: 110% auto` = zoom centrado)
 
 Para que la exportación coincida con lo que ves en el navegador, no cambies las dimensiones del `.card` (1826×294 px a ventana de 1948 px). Si cambias el diseño, ajusta en `export_cards.py` las constantes `WINDOW_W`, `WINDOW_H`, `PAD_TOP` y `PAD_LEFT`. El `.card` lleva un zoom de 1.05 (`transform: scale(1.05)` desde el centro) y el fondo de la exportación es transparente.

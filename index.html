@@ -64,6 +64,10 @@
 
     .name {
       margin: 0;
+      max-width: calc(100% - 48px);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
       font-size: clamp(58px, 5vw, 100px);
       line-height: 0.95;
       font-weight: 700;
@@ -86,19 +90,8 @@
       width: 33%;
       height: 100%;
       z-index: 1;
-    }
 
-    .character img {
-      width: 100%;
-      height: 100%;
-      display: block;
-      object-fit: cover;
-
-      /*
-       * Ajusta este valor si la imagen original
-       * tiene un encuadre ligeramente diferente.
-       */
-      object-position: center 12%;
+      background: url('buggy.png') no-repeat center 12% / 110% auto;
     }
 
     /* Círculo x4 */
@@ -195,9 +188,7 @@
         <div class="code">OP16-048</div>
       </div>
 
-      <div class="character">
-        <img src="buggy.png" alt="Buggy">
-      </div>
+      <div class="character" role="img" aria-label="Buggy"></div>
 
     </div>
 
