@@ -2,10 +2,12 @@
 """API web para generar cartas a partir de un texto NxCODIGO.
 
 Endpoints:
-    POST /api/generate       → JSON {text} → JSON con PNG en base64 y errores
-    POST /api/generate/zip   → JSON {text} → ZIP binario con los PNG
-    GET  /healthz            → 200 ok
+    GET  /api/components      → lista de componentes disponibles (components/*.html)
+    POST /api/generate        → JSON {text, component} → JSON con PNG en base64 y errores
+    POST /api/generate/zip    → JSON {text, component} → ZIP binario con los PNG
+    GET  /healthz             → 200 ok
 
+component (opcional, por defecto "card") selecciona la plantilla de components/.
 Requiere generator.py (y Chromium disponible). Puerto por defecto: 8000.
 """
 
@@ -13,12 +15,10 @@ import base64
 import io
 import json
 import os
-import tempfile
 import urllib.error
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
 
 import generator
 
@@ -28,7 +28,7 @@ MAX_WORKERS = 4
 JSON_ERRORS = (urllib.error.HTTPError, urllib.error.URLError, OSError, ValueError)
 
 
-def generate_all(text: str, chrome: str, api_base: str, tmp_root: Path) -> dict:
+def generate_all(text: str, chrome: str, api_base: str, component: str) -> dict:
     entries = generator.parse_text(text)
     result = {"cards": [], "errors": []}
     if not entries:
@@ -37,12 +37,11 @@ def generate_all(text: str, chrome: str, api_base: str, tmp_root: Path) -> dict:
     def run(entry: tuple[str, str]) -> dict:
         code, qty = entry
         qty_label = f"x{qty}" if not qty.startswith("x") else qty
-        work_dir = tmp_root / code
-        work_dir.mkdir(exist_ok=True)
-        out_path = work_dir / f"{code}.png"
+        out_path = generator.CACHE_DIR / f"{code}.png"
         try:
             name = generator.generate_png(
-                code, qty_label, api_base, chrome, work_dir, out_path
+                code, qty_label, api_base, chrome,
+                generator.CACHE_DIR, out_path, component,
             )
             return {
                 "status": "ok",
@@ -87,7 +86,7 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _read_body(self) -> str:
+    def _read_body(self) -> tuple[str, str]:
         length = int(self.headers.get("Content-Length") or 0)
         if length > MAX_BODY:
             raise ValueError("cuerpo demasiado grande")
@@ -99,14 +98,18 @@ class Handler(BaseHTTPRequestHandler):
         text = payload.get("text", "")
         if not isinstance(text, str):
             raise ValueError("falta el campo 'text'")
-        return text
+        component = payload.get("component", "card")
+        if not isinstance(component, str):
+            raise ValueError("el campo 'component' debe ser texto")
+        generator.resolve_component(component)
+        return text, component
 
     def do_POST(self):  # noqa: N802 - método HTTP
         if self.path not in ("/api/generate", "/api/generate/zip"):
             self._send_json({"error": "ruta no encontrada"}, 404)
             return
         try:
-            text = self._read_body()
+            text, component = self._read_body()
         except ValueError as exc:
             self._send_json({"error": str(exc)}, 400)
             return
@@ -117,26 +120,25 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"error": "falta API_CARD"}, 500)
             return
 
-        with tempfile.TemporaryDirectory(prefix="cartas-api-") as tmp:
-            tmp_root = Path(tmp)
-            if self.path == "/api/generate/zip":
-                self._send_zip(text, chrome, api_base, tmp_root)
-            else:
-                result = generate_all(text, chrome, api_base, tmp_root)
-                self._send_json(result)
+        if self.path == "/api/generate/zip":
+            self._send_zip(text, chrome, api_base, component)
+        else:
+            result = generate_all(text, chrome, api_base, component)
+            self._send_json(result)
 
-    def _send_zip(self, text: str, chrome: str, api_base: str, tmp_root: Path) -> None:
+    def _send_zip(
+        self, text: str, chrome: str, api_base: str, component: str
+    ) -> None:
         entries = generator.parse_text(text)
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
             for code, qty in entries:
                 qty_label = f"x{qty}" if not qty.startswith("x") else qty
-                work_dir = tmp_root / code
-                work_dir.mkdir(exist_ok=True)
-                out_path = work_dir / f"{code}.png"
+                out_path = generator.CACHE_DIR / f"{code}.png"
                 try:
                     generator.generate_png(
-                        code, qty_label, api_base, chrome, work_dir, out_path
+                        code, qty_label, api_base, chrome,
+                        generator.CACHE_DIR, out_path, component,
                     )
                     zf.write(out_path, arcname=f"{code}.png")
                 except JSON_ERRORS:
@@ -152,6 +154,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):  # noqa: N802 - método HTTP
         if self.path == "/healthz":
             self._send_json({"ok": True})
+            return
+        if self.path == "/api/components":
+            self._send_json({"components": generator.list_components()})
             return
         self._send_json({"error": "ruta no encontrada"}, 404)
 

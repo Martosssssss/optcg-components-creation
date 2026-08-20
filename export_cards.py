@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Exporta el componente de index.html como PNG por cada carta de generate.txt.
+"""Exporta un componente de components/ como PNG por cada carta de generate.txt.
 
 Uso:
-    python3 export_cards.py
+    python3 export_cards.py [--component card]
 
 generate.txt tiene una línea por carta con el formato <cantidad>x<codigo>
 (ej: 4xOP15-014). Por cada código consulta la API definida en API_CARD (.env),
@@ -11,6 +11,7 @@ descarga la imagen y exporta el componente a exports/<codigo>.png.
 Los códigos que fallan se registran en errors.txt. Requiere Google Chrome.
 """
 
+import argparse
 import os
 import sys
 from pathlib import Path
@@ -33,18 +34,32 @@ def read_generate() -> list[tuple[str, str]]:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Exporta cartas a PNG.")
+    parser.add_argument(
+        "--component",
+        default="card",
+        help="Componente de components/ a usar (por defecto: card).",
+    )
+    args = parser.parse_args()
+
     chrome = generator.find_chrome()
     api_base = generator.get_api_base()
     if not api_base:
         sys.exit("Falta la variable API_CARD en .env o en el entorno.")
 
+    try:
+        generator.resolve_component(args.component)
+    except ValueError as exc:
+        sys.exit(str(exc))
+
     OUTPUT_DIR.mkdir(exist_ok=True)
-    generator.clear_cache()
+    generator.CACHE_DIR.mkdir(exist_ok=True)
 
     entries = read_generate()
 
     print(f"Chrome: {os.path.basename(chrome)}")
     print(f"API: {api_base}")
+    print(f"Componente: {args.component}")
     print(f"Exportando {len(entries)} carta(s) a {OUTPUT_DIR}\n")
 
     errors: list[str] = []
@@ -54,7 +69,7 @@ def main() -> None:
         try:
             name = generator.generate_png(
                 code, qty_label, api_base, chrome,
-                generator.CACHE_DIR, OUTPUT_DIR / f"{code}.png",
+                generator.CACHE_DIR, OUTPUT_DIR / f"{code}.png", args.component,
             )
             out_path = OUTPUT_DIR / f"{code}.png"
             print(f"  → {name}: {out_path.name} ({out_path.stat().st_size} bytes)")

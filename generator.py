@@ -3,6 +3,7 @@
 Compartido por la CLI (export_cards.py) y la API web (server.py).
 """
 
+import email.utils
 import json
 import os
 import re
@@ -11,14 +12,16 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
 BASE_DIR = Path(__file__).resolve().parent
 CACHE_DIR = BASE_DIR / ".cache"
-INDEX_HTML = BASE_DIR / "index.html"
+COMPONENTS_DIR = BASE_DIR / "components"
 ENV_FILE = BASE_DIR / ".env"
 
 WINDOW_W, WINDOW_H = 1948, 367
@@ -36,11 +39,57 @@ CHROME_CANDIDATES = [
 USER_AGENT = "cartas-ui/1.0"
 LINE_RE = re.compile(r"^\s*(\d+)\s*x\s*([A-Za-z0-9-]+)\s*$")
 NAME_PAREN_RE = re.compile(r"(?:\s*\([^()]*\))+$")
+COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
+# Intervalo mínimo entre peticiones a la API (segundos), para no superar su
+# rate limit (429). Ajustable con OPTCG_MIN_INTERVAL.
+MIN_REQUEST_INTERVAL = 1.0
+RATE_LOCK = threading.Lock()
+_last_request = -MIN_REQUEST_INTERVAL
+
+# Colores de las cartas de One Piece TCG → hex (ajustables).
+OPTCG_COLORS: dict[str, str] = {
+    "red": "#C8102E",
+    "green": "#00A651",
+    "blue": "#0057B8",
+    "purple": "#7B2D8E",
+    "black": "#2E2E2E",
+    "yellow": "#FFB800",
+}
+
+
+def card_colors_to_hex(card_color: str | None) -> list[str]:
+    """Devuelve los hex de los colores de la carta (1-2) a partir de card_color.
+
+    Si no hay colores reconocidos devuelve una lista vacía (el componente usa
+    su degradado por defecto).
+    """
+    hexes: list[str] = []
+    for part in re.split(r"\s+", (card_color or "").strip()):
+        hex_color = OPTCG_COLORS.get(part.lower())
+        if hex_color:
+            hexes.append(hex_color)
+    return list(dict.fromkeys(hexes))
 
 
 def clean_name(name: str) -> str:
     """Elimina los grupos de paréntesis del final del nombre (códigos, arte, etc.)."""
     return NAME_PAREN_RE.sub("", name).strip()
+
+
+def list_components() -> list[str]:
+    """Devuelve los nombres de los componentes disponibles (componentes/*.html)."""
+    return sorted(p.stem for p in COMPONENTS_DIR.glob("*.html"))
+
+
+def resolve_component(name: str) -> Path:
+    """Valida el nombre de un componente y devuelve su ruta (evita path traversal)."""
+    if not COMPONENT_RE.match(name or ""):
+        raise ValueError(f"nombre de componente no válido: {name!r}")
+    path = COMPONENTS_DIR / f"{name}.html"
+    if not path.is_file():
+        raise ValueError(f"no existe el componente {name!r}")
+    return path
 
 
 def find_chrome() -> str:
@@ -84,32 +133,119 @@ def parse_text(text: str) -> list[tuple[str, str]]:
     return entries
 
 
+def _rate_limit() -> None:
+    """Espera lo necesario para respetar el intervalo mínimo entre peticiones."""
+    global _last_request
+    interval = float(os.environ.get("OPTCG_MIN_INTERVAL", MIN_REQUEST_INTERVAL))
+    with RATE_LOCK:
+        now = time.monotonic()
+        wait = interval - (now - _last_request)
+        if wait > 0:
+            time.sleep(wait)
+        _last_request = time.monotonic()
+
+
+def _retry_after(exc: urllib.error.HTTPError) -> float | None:
+    """Segundos indicados por Retry-After (número o fecha HTTP), o None."""
+    value = exc.headers.get("Retry-After")
+    if not value:
+        return None
+    try:
+        return max(0.0, float(value))
+    except ValueError:
+        pass
+    try:
+        dt = email.utils.parsedate_to_datetime(value)
+        return max(0.0, (dt - datetime.now(timezone.utc)).total_seconds())
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def _throttled_open(url: str) -> object:
+    """Abre url respetando el rate limit y reintentando ante 429.
+
+    Espera lo que indique Retry-After (con tope OPTCG_MAX_RETRY_WAIT). Si el
+    bloqueo es más largo que el tope, avisa con el tiempo restante.
+    """
+    attempts = 4
+    base_backoff = 5.0
+    max_wait = float(os.environ.get("OPTCG_MAX_RETRY_WAIT", "600"))
+    for attempt in range(attempts):
+        _rate_limit()
+        request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        try:
+            return urllib.request.urlopen(request, timeout=30)
+        except urllib.error.HTTPError as exc:
+            if exc.code != 429 or attempt >= attempts - 1:
+                raise
+            wait = _retry_after(exc) or base_backoff
+            if wait > max_wait:
+                raise ValueError(
+                    "límite de la API (429); espera ~"
+                    f"{int(wait / 60)} min y vuelve a intentarlo"
+                ) from exc
+            time.sleep(wait)
+    raise AssertionError("bucle de reintentos sin resolver")
+
+
+def _atomic_write(path: Path, content: str) -> None:
+    """Escribe content en path de forma atómica (evita lecturas parciales)."""
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(content, encoding="utf-8")
+    os.replace(tmp, path)
+
+
 def fetch_card(api_base: str, code: str) -> dict:
+    """Devuelve los datos de una carta, cacheando la respuesta en .cache/meta/."""
+    meta_dir = CACHE_DIR / "meta"
+    cached = meta_dir / f"{code}.json"
+    if cached.is_file():
+        return json.loads(cached.read_text(encoding="utf-8"))
     url = f"{api_base.rstrip('/')}/{code}"
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(request, timeout=30) as resp:
+    with _throttled_open(url) as resp:
         data = json.loads(resp.read().decode("utf-8"))
     if not isinstance(data, list) or not data:
         raise ValueError("la API no devolvió datos")
-    return next(
+    card = next(
         (c for c in data if c.get("card_image_id") == c.get("card_set_id")),
         data[0],
     )
+    meta_dir.mkdir(parents=True, exist_ok=True)
+    _atomic_write(cached, json.dumps(card, ensure_ascii=False))
+    return card
 
 
 def download_image(url: str, dest: Path) -> Path:
     if dest.is_file() and dest.stat().st_size > 0:
         return dest
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(request, timeout=60) as resp:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    with _throttled_open(url) as resp:
         data = resp.read()
-    dest.write_bytes(data)
+    tmp = dest.with_suffix(dest.suffix + ".tmp")
+    tmp.write_bytes(data)
+    os.replace(tmp, dest)
     return dest
 
 
-def build_export_html(name: str, code: str, quantity: str, image_abs: str) -> str:
-    html = INDEX_HTML.read_text(encoding="utf-8")
+def build_export_html(
+    name: str,
+    code: str,
+    quantity: str,
+    image_abs: str,
+    template: Path,
+    colors: list[str] | None = None,
+) -> str:
+    html = template.read_text(encoding="utf-8")
     bg_image = f'url("{image_abs}")'
+    color_vars = ""
+    if colors:
+        c1 = colors[0]
+        c2 = colors[1] if len(colors) > 1 else colors[0]
+        color_vars = f"""
+      :root {{
+        --optcg-c1: {c1};
+        --optcg-c2: {c2};
+      }}"""
     override = f"""
     <style>
       html {{
@@ -122,12 +258,21 @@ def build_export_html(name: str, code: str, quantity: str, image_abs: str) -> st
         padding-left: {PAD_LEFT}px;
         background: transparent;
       }}
+      {color_vars}
     </style>
     <script>
-      document.querySelector(".name").textContent = {name!r};
-      document.querySelector(".code").textContent = {code!r};
-      document.querySelector(".quantity").textContent = {quantity!r};
-      document.querySelector(".character").style.backgroundImage = {bg_image!r};
+      function setText(sel, val) {{
+        const el = document.querySelector(sel);
+        if (el) el.textContent = val;
+      }}
+      function setBg(sel, url) {{
+        const el = document.querySelector(sel);
+        if (el) el.style.backgroundImage = url;
+      }}
+      setText(".name", {name!r});
+      setText(".code", {code!r});
+      setText(".quantity", {quantity!r});
+      setBg(".character", {bg_image!r});
     </script>
   </body>
 """
@@ -165,8 +310,10 @@ def generate_png(
     chrome: str,
     image_dir: Path,
     out_path: Path,
+    component: str = "card",
 ) -> str:
     """Genera el PNG de una carta y lo escribe en out_path. Devuelve el nombre."""
+    template = resolve_component(component)
     card = fetch_card(api_base, code)
     name = clean_name(card.get("card_name") or code)
     image_url = card.get("card_image")
@@ -175,7 +322,10 @@ def generate_png(
 
     ext = Path(urlparse(image_url).path).suffix or ".img"
     image_path = download_image(image_url, image_dir / f"{code}{ext}")
-    html_text = build_export_html(name, code, qty_label, image_path.resolve().as_posix())
+    colors = card_colors_to_hex(card.get("card_color"))
+    html_text = build_export_html(
+        name, code, qty_label, image_path.resolve().as_posix(), template, colors
+    )
 
     with tempfile.NamedTemporaryFile(
         "w", suffix=".html", dir=image_dir, delete=False, encoding="utf-8"
@@ -195,6 +345,7 @@ def generate_cards(
     chrome: str,
     image_dir: Path,
     out_dir: Path,
+    component: str = "card",
 ) -> tuple[list[dict], list[dict]]:
     """Genera varias cartas secuencialmente. Devuelve (ok, errors) con rutas PNG."""
     ok: list[dict] = []
@@ -203,7 +354,9 @@ def generate_cards(
         qty_label = f"x{qty}" if not qty.startswith("x") else qty
         out_path = out_dir / f"{code}.png"
         try:
-            name = generate_png(code, qty_label, api_base, chrome, image_dir, out_path)
+            name = generate_png(
+                code, qty_label, api_base, chrome, image_dir, out_path, component
+            )
             ok.append({"code": code, "name": name, "qty": qty, "path": out_path})
         except (
             urllib.error.HTTPError,
