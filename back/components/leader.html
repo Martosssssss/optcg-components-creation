@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Leader</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #fff;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+/* CSS de los componentes de carta (Card y Leader).
+   Réplica exacta del CSS de components/card.html y components/leader.html.
+   El SSR (scripts/build-components.tsx) lo inlinea en components/*.html.
+   La app lo importa globalmente en main.tsx. */
+
+/* Wrapper de centrado para previews dentro de la app */
+.card-viewport {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 100%;
+  background: #fff;
+}
+
+/* --- Card --- */
+.card {
+  position: relative;
+  width: min(1826px, calc(100vw - 30px));
+  height: 294px;
+  overflow: visible;
+  transform: scale(1.05);
+  transform-origin: center;
+}
+
+.card-content {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 45px;
+  background: var(--optcg-c1, #ff5a00);
+}
+
+.info {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 67%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-right: 2%;
+  color: white;
+  z-index: 2;
+}
+
+.name {
+  margin: 0;
+  max-width: calc(100% - 48px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: clamp(58px, 5vw, 100px);
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -3px;
+}
+
+.code {
+  margin-top: 22px;
+  font-size: clamp(28px, 2.2vw, 51px);
+  line-height: 1;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.character {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 33%;
+  height: 100%;
+  z-index: 1;
+}
+
+.quantity {
+  position: absolute;
+  z-index: 5;
+  top: -31px;
+  right: -12px;
+  width: 126px;
+  height: 126px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--optcg-c1, #ff6b0b);
+  color: white;
+  font-size: 61px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -3px;
+}
+
+@media (max-width: 800px) {
+  .card { height: 220px; }
+  .info { width: 65%; }
+  .character { width: 38%; }
+  .name { letter-spacing: -2px; }
+  .code { margin-top: 12px; }
+  .quantity { width: 90px; height: 90px; top: -20px; right: -10px; font-size: 42px; }
+}
+
+@media (max-width: 520px) {
+  .card { height: 170px; }
+  .info { width: 62%; }
+  .character { width: 42%; }
+  .code { margin-top: 8px; }
+  .quantity { width: 68px; height: 68px; top: -14px; right: -6px; font-size: 31px; }
+}
+
+/* --- Leader --- */
+.leader-card {
+  position: relative;
+  width: min(1826px, calc(100vw - 30px));
+  height: 294px;
+  overflow: hidden;
+  border-radius: 45px;
+  transform: scale(1.05);
+  transform-origin: center;
+}
+
+.leader-text {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 67%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-right: 2%;
+  z-index: 2;
+  background: linear-gradient(
+    105deg,
+    var(--optcg-c1, #2e8cff) 0%,
+    var(--optcg-c1, #299ed9) 28%,
+    var(--optcg-c2, #2eb5a2) 58%,
+    var(--optcg-c2, #29c75c) 100%
+  );
+}
+
+.leader-text h1 {
+  margin: 0;
+  color: white;
+  font-size: clamp(70px, 7vw, 112px);
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -3px;
+  max-width: calc(100% - 48px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.leader-image {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 33%;
+  height: 100%;
+  z-index: 1;
+}
+
+@media (max-width: 800px) {
+  .leader-card { height: 220px; }
+  .leader-text { width: 65%; }
+  .leader-image { width: 38%; }
+  .leader-text h1 { font-size: clamp(42px, 9vw, 72px); letter-spacing: -2px; }
+}
+
+@media (max-width: 520px) {
+  .leader-card { height: 170px; }
+  .leader-text { width: 62%; }
+  .leader-image { width: 42%; }
+  .leader-text h1 { font-size: clamp(32px, 9vw, 54px); letter-spacing: -2px; }
+}
+  </style>
+</head>
+
+<body>
+<div class="leader-card"><div class="leader-text"><h1 class="name">Líder</h1></div><div class="leader-image character" role="img" aria-label="Líder" style="background-repeat:no-repeat;background-position:center 12%;background-size:125% auto;background-image:url(&quot;../example_images/leader.png&quot;)"></div></div>
+</body>
+</html>

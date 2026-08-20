@@ -16,9 +16,10 @@ import os
 import sys
 from pathlib import Path
 
-import generator
+from config import BASE_DIR, CACHE_DIR, find_chrome, get_api_base
+from generator import generate_png, normalize_qty, parse_text
+from render import resolve_component
 
-BASE_DIR = generator.BASE_DIR
 OUTPUT_DIR = BASE_DIR / "exports"
 GENERATE_FILE = BASE_DIR / "generate.txt"
 ERRORS_FILE = BASE_DIR / "errors.txt"
@@ -27,7 +28,7 @@ ERRORS_FILE = BASE_DIR / "errors.txt"
 def read_generate() -> list[tuple[str, str]]:
     if not GENERATE_FILE.is_file():
         sys.exit(f"No se encontró {GENERATE_FILE}.")
-    entries = generator.parse_text(GENERATE_FILE.read_text(encoding="utf-8"))
+    entries = parse_text(GENERATE_FILE.read_text(encoding="utf-8"))
     if not entries:
         sys.exit(f"{GENERATE_FILE} no tiene cartas válidas.")
     return entries
@@ -42,18 +43,18 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    chrome = generator.find_chrome()
-    api_base = generator.get_api_base()
+    chrome = find_chrome()
+    api_base = get_api_base()
     if not api_base:
         sys.exit("Falta la variable API_CARD en .env o en el entorno.")
 
     try:
-        generator.resolve_component(args.component)
+        resolve_component(args.component)
     except ValueError as exc:
         sys.exit(str(exc))
 
     OUTPUT_DIR.mkdir(exist_ok=True)
-    generator.CACHE_DIR.mkdir(exist_ok=True)
+    CACHE_DIR.mkdir(exist_ok=True)
 
     entries = read_generate()
 
@@ -64,14 +65,13 @@ def main() -> None:
 
     errors: list[str] = []
     for idx, (code, qty) in enumerate(entries, 1):
-        qty_label = f"x{qty}" if not qty.startswith("x") else qty
+        qty_label = normalize_qty(qty)
         print(f"[{idx}/{len(entries)}] {code} ({qty_label})")
+        out_path = OUTPUT_DIR / f"{code}.png"
         try:
-            name = generator.generate_png(
-                code, qty_label, api_base, chrome,
-                generator.CACHE_DIR, OUTPUT_DIR / f"{code}.png", args.component,
+            name, _colors = generate_png(
+                code, qty, api_base, chrome, out_path, args.component
             )
-            out_path = OUTPUT_DIR / f"{code}.png"
             print(f"  → {name}: {out_path.name} ({out_path.stat().st_size} bytes)")
         except (OSError, ValueError) as exc:
             errors.append(f"{code}: {exc}")

@@ -10,7 +10,7 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY generator.py server.py ./
+COPY *.py ./
 COPY components/ ./components/
 
 EXPOSE 8000

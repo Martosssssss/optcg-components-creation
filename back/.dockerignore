@@ -1,0 +1,13 @@
+.git
+.env
+.cache
+exports
+errors.txt
+__pycache__
+*.py[cod]
+generate.txt
+generate.example.txt
+example_images
+.DS_Store
+.gitignore
+README.md
