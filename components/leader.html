@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #fff;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    .leader-card {
+      width: min(1826px, calc(100vw - 30px));
+      height: 294px;
+
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+
+      overflow: hidden;
+      border-radius: 68px;
+
+      /* Sombra muy ligera, como en la referencia */
+      box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+    }
+
+    /* PANEL IZQUIERDO */
+    .leader-text {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      background: linear-gradient(
+        105deg,
+        var(--optcg-c1, #2e8cff) 0%,
+        var(--optcg-c1, #299ed9) 28%,
+        var(--optcg-c2, #2eb5a2) 58%,
+        var(--optcg-c2, #29c75c) 100%
+      );
+    }
+
+    .leader-text h1 {
+      margin: 0;
+      color: white;
+
+      font-size: clamp(70px, 7vw, 112px);
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -3px;
+
+      max-width: calc(100% - 48px);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* PANEL DERECHO */
+    .leader-image {
+      position: relative;
+      overflow: hidden;
+
+      /* Mismo recorte que card.html: zoom centrado */
+      background: url("../example_images/leader.png") no-repeat center 12% / 125% auto;
+    }
+
+    @media (max-width: 800px) {
+      .leader-card {
+        height: 220px;
+        border-radius: 38px;
+      }
+
+      .leader-text h1 {
+        font-size: clamp(42px, 9vw, 72px);
+        letter-spacing: -2px;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .leader-card {
+        height: 170px;
+      }
+
+      .leader-text h1 {
+        font-size: clamp(32px, 9vw, 54px);
+        letter-spacing: -2px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="leader-card">
+    <div class="leader-text">
+      <h1 class="name">LEADER</h1>
+    </div>
+
+    <div class="leader-image character"></div>
+  </div>
+
+</body>
+</html>
